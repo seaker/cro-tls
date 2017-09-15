@@ -1,5 +1,5 @@
 use Cro;
-use Cro::SSL;
+use Cro::TLS;
 use Cro::TCP;
 use IO::Socket::Async::SSL;
 use Test;
@@ -12,18 +12,18 @@ constant %key-cert := {
 };
 
 # Type relationships.
-ok Cro::SSL::Listener ~~ Cro::Source, 'SSL listener is a source';
-ok Cro::SSL::Listener.produces ~~ Cro::SSL::ServerConnection, 'SSL listener produces connections';
-ok Cro::SSL::ServerConnection ~~ Cro::Connection, 'SSL connection is a connection';
-ok Cro::SSL::ServerConnection ~~ Cro::Replyable, 'SSL connection is replyable';
-ok Cro::SSL::ServerConnection.produces ~~ Cro::TCP::Message, 'SSL connection produces TCP messages';
-ok Cro::SSL::Connector ~~ Cro::Connector, 'SSL connector is a connector';
-ok Cro::SSL::Connector.consumes ~~ Cro::TCP::Message, 'SSL connector consumes TCP messages';
-ok Cro::SSL::Connector.produces ~~ Cro::TCP::Message, 'SSL connector produces TCP messages';
+ok Cro::TLS::Listener ~~ Cro::Source, 'TLS listener is a source';
+ok Cro::TLS::Listener.produces ~~ Cro::TLS::ServerConnection, 'TLS listener produces connections';
+ok Cro::TLS::ServerConnection ~~ Cro::Connection, 'TLS connection is a connection';
+ok Cro::TLS::ServerConnection ~~ Cro::Replyable, 'TLS connection is replyable';
+ok Cro::TLS::ServerConnection.produces ~~ Cro::TCP::Message, 'TLS connection produces TCP messages';
+ok Cro::TLS::Connector ~~ Cro::Connector, 'TLS connector is a connector';
+ok Cro::TLS::Connector.consumes ~~ Cro::TCP::Message, 'TLS connector consumes TCP messages';
+ok Cro::TLS::Connector.produces ~~ Cro::TCP::Message, 'TLS connector produces TCP messages';
 
-# Cro::SSL::Listener
+# Cro::TLS::Listener
 {
-    my $lis = Cro::SSL::Listener.new(port => TEST_PORT, |%key-cert);
+    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert);
     is $lis.port, TEST_PORT, 'Listener has correct port';
     dies-ok { await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca) },
         'Not listening simply by creating the object';
@@ -38,13 +38,13 @@ ok Cro::SSL::Connector.produces ~~ Cro::TCP::Message, 'SSL connector produces TC
     my $client-conn-a;
     lives-ok { $client-conn-a = await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca) },
         'Listening for connections once the Supply is tapped';
-    ok $server-conns.receive ~~ Cro::SSL::ServerConnection,
-        'Listener emitted a SSL connection';
+    ok $server-conns.receive ~~ Cro::TLS::ServerConnection,
+        'Listener emitted a TLS connection';
     nok $server-conns.poll, 'Only that one connection emitted';
     $client-conn-a.close;
 
     my $client-conn-b = await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca);
-    ok $server-conns.receive ~~ Cro::SSL::ServerConnection,
+    ok $server-conns.receive ~~ Cro::TLS::ServerConnection,
         'Listener emitted second connection';
     nok $server-conns.poll, 'Only that one connection emitted';
     $client-conn-b.close;
@@ -54,9 +54,9 @@ ok Cro::SSL::Connector.produces ~~ Cro::TCP::Message, 'SSL connector produces TC
         'Not listening after Supply tap closed';
 }
 
-# Cro::SSL::ServerConnection and Cro::TCP::Message
+# Cro::TLS::ServerConnection and Cro::TCP::Message
 {
-    my $lis = Cro::SSL::Listener.new(port => TEST_PORT, |%key-cert);
+    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert);
     my $server-conns = Channel.new;
     my $tap = $lis.incoming.tap({ $server-conns.send($_) });
     my $client-conn = await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca);
@@ -89,7 +89,7 @@ ok Cro::SSL::Connector.produces ~~ Cro::TCP::Message, 'SSL connector produces TC
         'Second message data has correct value';
 
     my $replier = $server-conn.replier;
-    ok $replier ~~ Cro::Sink, 'The SSL connection replier is a Cro::Sink';
+    ok $replier ~~ Cro::Sink, 'The TLS connection replier is a Cro::Sink';
 
     my $fake-replies = Supplier.new;
     my $sinker = $replier.sinker($fake-replies.Supply);
@@ -122,10 +122,10 @@ my class UppercaseTransform does Cro::Transform {
 }
 
 {
-    my $listener = Cro::SSL::Listener.new(port => TEST_PORT, |%key-cert);
+    my $listener = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert);
     my $loud-service = Cro.compose($listener, UppercaseTransform);
     ok $loud-service ~~ Cro::Service,
-        'Cro::SSL::Listener and a transform compose to make a service';
+        'Cro::TLS::Listener and a transform compose to make a service';
     lives-ok { $loud-service.start }, 'Can start the service';
 
     my $client-conn-a = await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca);
@@ -162,16 +162,16 @@ my class UppercaseTransform does Cro::Transform {
     dies-ok
         {
             react {
-                whenever Cro::SSL::Connector.establish(port => TEST_PORT, |%ca, $source) {}
+                whenever Cro::TLS::Connector.establish(port => TEST_PORT, |%ca, $source) {}
             }
         },
         'Establishing connection dies before service is started';
 
-    my $listener = Cro::SSL::Listener.new(port => TEST_PORT, |%key-cert);
+    my $listener = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert);
     my $loud-service = Cro.compose($listener, UppercaseTransform);
     $loud-service.start;
 
-    my $responses = Cro::SSL::Connector.establish(port => TEST_PORT, |%ca, $source);
+    my $responses = Cro::TLS::Connector.establish(port => TEST_PORT, |%ca, $source);
     ok $responses ~~ Supply, 'Connector establish method returns a Supply';
     react {
         whenever $responses -> $message {
@@ -185,7 +185,7 @@ my class UppercaseTransform does Cro::Transform {
     dies-ok
         {
             react {
-                whenever Cro::SSL::Connector.establish(port => TEST_PORT, $source) {}
+                whenever Cro::TLS::Connector.establish(port => TEST_PORT, $source) {}
             }
         },
         'Establishing connection dies once service is stopped';
@@ -193,7 +193,7 @@ my class UppercaseTransform does Cro::Transform {
 
 # ALPN
 if supports-alpn() {
-    my $lis = Cro::SSL::Listener.new(port => TEST_PORT, |%key-cert, alpn => <h2 http/1.1>);
+    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, alpn => <h2 http/1.1>);
     my $server-conns = Channel.new;
     my $incoming = $lis.incoming;
     my $tap = $incoming.tap({ $server-conns.send($_) });
@@ -202,7 +202,7 @@ if supports-alpn() {
         my $c = IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca, alpn => <h2>);
         await Promise.anyof($c, Promise.in(5));
         is $c.status, Kept,
-            'Can connect to a Cro::SSL::Listener with ALPN set up with ALPN from client';
+            'Can connect to a Cro::TLS::Listener with ALPN set up with ALPN from client';
         is $server-conns.receive.alpn-result, 'h2', 'ALPN negotiated result set on connection';
         $c.result.close;
     }
@@ -211,18 +211,18 @@ if supports-alpn() {
         my $c = IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca);
         await Promise.anyof($c, Promise.in(5));
         is $c.status, Kept,
-            'Can connect to a Cro::SSL::Listener with ALPN set up without ALPN from client';
+            'Can connect to a Cro::TLS::Listener with ALPN set up without ALPN from client';
         nok $server-conns.receive.alpn-result, 'No ALPN negotiation on this connection';
         $c.result.close;
     }
 
     $tap.close;
 } else {
-    skip "no alpn support in this ssl version", 4;
+    skip "no alpn support in this TLS version", 4;
 }
 
 if supports-alpn() {
-    my $listener = Cro::SSL::Listener.new(port => TEST_PORT, |%key-cert, alpn => <h2 http/1.1>);
+    my $listener = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, alpn => <h2 http/1.1>);
     my $loud-service = Cro.compose($listener, UppercaseTransform);
     $loud-service.start;
 
@@ -239,7 +239,7 @@ if supports-alpn() {
     }
 
     my $pipeline = Cro.compose(
-        Cro::SSL::Connector,
+        Cro::TLS::Connector,
         Cro::ConnectionConditional.new(
             { (.alpn-result // '') eq 'h2' } => [DoubleTransform, DoubleTransform],
             DoubleTransform
@@ -269,7 +269,7 @@ if supports-alpn() {
 
     $loud-service.stop;
 } else {
-    skip "no alpn support in this ssl version", 2;
+    skip "no alpn support in this TLS version", 2;
 }
 
 done-testing;

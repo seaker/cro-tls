@@ -9,11 +9,11 @@ use IO::Socket::Async::SSL;
 
 sub supports-alpn(--> Bool) is export { IO::Socket::Async::SSL.supports-alpn }
 
-class Cro::SSL::Replier does Cro::Sink {
+class Cro::TLS::Replier does Cro::Sink {
     has $!socket;
-    
+
     submethod BUILD(:$!socket!) { }
-    
+
     method consumes() { Cro::TCP::Message }
 
     method sinker(Supply:D $pipeline) returns Supply:D {
@@ -26,7 +26,7 @@ class Cro::SSL::Replier does Cro::Sink {
     }
 }
 
-class Cro::SSL::ServerConnection does Cro::Connection does Cro::Replyable {
+class Cro::TLS::ServerConnection does Cro::Connection does Cro::Replyable {
     has $!socket;
     has $.replier;
 
@@ -39,7 +39,7 @@ class Cro::SSL::ServerConnection does Cro::Connection does Cro::Replyable {
     method produces() { Cro::TCP::Message }
 
     submethod BUILD(:$!socket!) {
-        $!replier = Cro::SSL::Replier.new(:$!socket)
+        $!replier = Cro::TLS::Replier.new(:$!socket)
     }
 
     method incoming() {
@@ -51,25 +51,25 @@ class Cro::SSL::ServerConnection does Cro::Connection does Cro::Replyable {
     }
 }
 
-class Cro::SSL::Listener does Cro::Source {
+class Cro::TLS::Listener does Cro::Source {
     has Str $.host;
     has Cro::Port $.port;
-    has %!ssl-config;
+    has %!tls-config;
 
-    submethod BUILD(Str :$!host = 'localhost', Cro::Port :$!port!, *%!ssl-config) {}
+    submethod BUILD(Str :$!host = 'localhost', Cro::Port :$!port!, *%!tls-config) {}
 
-    method produces() { Cro::SSL::ServerConnection }
+    method produces() { Cro::TLS::ServerConnection }
 
     method incoming() {
         supply {
-            whenever IO::Socket::Async::SSL.listen($!host, $!port, |%!ssl-config) -> $socket {
-                emit Cro::SSL::ServerConnection.new(:$socket);
+            whenever IO::Socket::Async::SSL.listen($!host, $!port, |%!tls-config) -> $socket {
+                emit Cro::TLS::ServerConnection.new(:$socket);
             }
         }
     }
 }
 
-class Cro::SSL::Connector does Cro::Connector {
+class Cro::TLS::Connector does Cro::Connector {
     class Transform does Cro::Transform {
         has $!socket;
 
