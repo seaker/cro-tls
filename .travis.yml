@@ -5,7 +5,7 @@ perl6:
     - '2017.10'
     - latest
 
-build:
+install:
     # Explicitly install HEAD of Cro::Core
     - zef install https://github.com/croservices/cro-core/archive/master.zip
 
