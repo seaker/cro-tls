@@ -6,9 +6,7 @@ perl6:
     - latest
 
 install:
+    - rakudobrew build-zef
     # Explicitly install HEAD of Cro::Core
     - zef install https://github.com/croservices/cro-core/archive/master.zip
-
-install:
-    - rakudobrew build-zef
     - zef --debug --deps-only install .
