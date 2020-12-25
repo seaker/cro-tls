@@ -55,8 +55,8 @@ ok Cro::TLS::Connector.produces ~~ Cro::TCP::Message, 'TLS connector produces TC
 }
 
 # Cro::TLS::ServerConnection and Cro::TCP::Message
-{
-    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert);
+sub test-server-conn($listener-options) {
+    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, |$listener-options);
     my $server-conns = Channel.new;
     my $tap = $lis.incoming.tap({ $server-conns.send($_) });
     my $client-conn = await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca);
@@ -106,6 +106,13 @@ ok Cro::TLS::Connector.produces ~~ Cro::TCP::Message, 'TLS connector produces TC
 
     $client-conn.close;
     $tap.close;
+}
+
+# Test ServerConnection with all variants of Cro::TLS::Listener nodelay setting
+my @nodelay-options = (), :!nodelay, :nodelay;
+for @nodelay-options {
+    subtest "Server connection with Listener options {.perl}",
+            { test-server-conn($_) };
 }
 
 my class UppercaseTransform does Cro::Transform {
