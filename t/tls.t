@@ -198,6 +198,33 @@ my class UppercaseTransform does Cro::Transform {
         'Establishing connection dies once service is stopped';
 }
 
+sub test-connector-nodelay($listen-option, $connect-option) {
+    my $listener = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, |$listen-option);
+    my $loud-service = Cro.compose($listener, UppercaseTransform);
+    $loud-service.start;
+
+    my $send = Supplier::Preserving.new;
+    my $responses = Cro::TLS::Connector.establish($send.Supply, port => TEST_PORT,
+                                                  |%ca, |$connect-option);
+    ok $responses ~~ Supply, 'Connector establish method returns a Supply';
+    my $client-received = $responses.Channel;
+
+    for < first second third > {
+        my $message = Cro::TCP::Message.new(:data(.encode('ascii')));
+        $send.emit($message);
+        # say "Emitted '$_' as $message.perl()";
+        is $client-received.receive.data.decode('ascii'), .uc, "Reply to $_ message correct";
+    }
+
+    $loud-service.stop;
+}
+
+# Test all combinations of client and server :nodelay settings
+for @nodelay-options X @nodelay-options {
+    subtest "Server listened with {.[0].perl}, client connected with {.[1].perl}",
+            { test-connector-nodelay(|$_) };
+}
+
 # ALPN
 if supports-alpn() {
     my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, alpn => <h2 http/1.1>);
