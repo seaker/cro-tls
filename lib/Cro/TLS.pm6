@@ -5,6 +5,7 @@ use Cro::Sink;
 use Cro::Source;
 use Cro::TCP;
 use Cro::Types;
+use Cro::TCP::NoDelay;
 use IO::Socket::Async::SSL;
 
 sub supports-alpn(--> Bool) is export { IO::Socket::Async::SSL.supports-alpn }
@@ -54,6 +55,7 @@ class Cro::TLS::ServerConnection does Cro::Connection does Cro::Replyable {
 class Cro::TLS::Listener does Cro::Source {
     has Str $.host;
     has Cro::Port $.port;
+    has Bool $.nodelay = False;
     has %!tls-config;
 
     submethod BUILD(Str :$!host = 'localhost', Cro::Port :$!port!, *%!tls-config) {}
@@ -63,6 +65,7 @@ class Cro::TLS::Listener does Cro::Source {
     method incoming() {
         supply {
             whenever IO::Socket::Async::SSL.listen($!host, $!port, |%!tls-config) -> $socket {
+                nodelay($socket) if $.nodelay;
                 emit Cro::TLS::ServerConnection.new(:$socket);
             }
         }
@@ -101,10 +104,14 @@ class Cro::TLS::Connector does Cro::Connector {
     method consumes() { Cro::TCP::Message }
     method produces() { Cro::TCP::Message }
 
-    method connect(*%options --> Promise) {
+    method connect(:$nodelay, *%options --> Promise) {
         my $host = %options<host>:delete // 'localhost';
         my $port = %options<port>:delete;
         IO::Socket::Async::SSL.connect($host, $port, |%options)
-            .then({ Transform.new(socket => .result) })
+            .then: {
+                my $socket = .result;
+                nodelay($socket) if $nodelay;
+                Transform.new(:$socket)
+            }
     }
 }
