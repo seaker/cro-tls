@@ -55,8 +55,8 @@ ok Cro::TLS::Connector.produces ~~ Cro::TCP::Message, 'TLS connector produces TC
 }
 
 # Cro::TLS::ServerConnection and Cro::TCP::Message
-{
-    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert);
+sub test-server-conn($listener-options) {
+    my $lis = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, |$listener-options);
     my $server-conns = Channel.new;
     my $tap = $lis.incoming.tap({ $server-conns.send($_) });
     my $client-conn = await IO::Socket::Async::SSL.connect('localhost', TEST_PORT, |%ca);
@@ -106,6 +106,13 @@ ok Cro::TLS::Connector.produces ~~ Cro::TCP::Message, 'TLS connector produces TC
 
     $client-conn.close;
     $tap.close;
+}
+
+# Test ServerConnection with all variants of Cro::TLS::Listener nodelay setting
+my @nodelay-options = (), :!nodelay, :nodelay;
+for @nodelay-options {
+    subtest "Server connection with Listener options {.perl}",
+            { test-server-conn($_) };
 }
 
 my class UppercaseTransform does Cro::Transform {
@@ -189,6 +196,33 @@ my class UppercaseTransform does Cro::Transform {
             }
         },
         'Establishing connection dies once service is stopped';
+}
+
+sub test-connector-nodelay($listen-option, $connect-option) {
+    my $listener = Cro::TLS::Listener.new(port => TEST_PORT, |%key-cert, |$listen-option);
+    my $loud-service = Cro.compose($listener, UppercaseTransform);
+    $loud-service.start;
+
+    my $send = Supplier::Preserving.new;
+    my $responses = Cro::TLS::Connector.establish($send.Supply, port => TEST_PORT,
+                                                  |%ca, |$connect-option);
+    ok $responses ~~ Supply, 'Connector establish method returns a Supply';
+    my $client-received = $responses.Channel;
+
+    for < first second third > {
+        my $message = Cro::TCP::Message.new(:data(.encode('ascii')));
+        $send.emit($message);
+        # say "Emitted '$_' as $message.perl()";
+        is $client-received.receive.data.decode('ascii'), .uc, "Reply to $_ message correct";
+    }
+
+    $loud-service.stop;
+}
+
+# Test all combinations of client and server :nodelay settings
+for @nodelay-options X @nodelay-options {
+    subtest "Server listened with {.[0].perl}, client connected with {.[1].perl}",
+            { test-connector-nodelay(|$_) };
 }
 
 # ALPN
