@@ -6,7 +6,7 @@ use Cro::Source;
 use Cro::TCP;
 use Cro::Types;
 use Cro::TCP::NoDelay;
-use IO::Socket::Async::SSL;
+use IO::Socket::Async::SSL:auth<github:seaker>;
 
 sub supports-alpn(--> Bool) is export { IO::Socket::Async::SSL.supports-alpn }
 

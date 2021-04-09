@@ -1,14 +1,14 @@
 use Cro;
 use Cro::TLS;
 use Cro::TCP;
-use IO::Socket::Async::SSL;
+use IO::Socket::Async::SSL:auth<github:seaker>;
 use Test;
 
 constant TEST_PORT = 31315;
-constant %ca := { ca-file => 't/certs-and-keys/ca-crt.pem' };
+constant %ca := { server-ca-file => 't/certs-and-keys/ca-crt.pem' };
 constant %key-cert := {
-    private-key-file => 't/certs-and-keys/server-key.pem',
-    certificate-file => 't/certs-and-keys/server-crt.pem'
+    server-private-key-file => 't/certs-and-keys/server-key.pem',
+    server-certificate-file => 't/certs-and-keys/server-crt.pem'
 };
 
 # Type relationships.
